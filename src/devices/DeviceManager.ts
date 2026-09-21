@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import { AndroidSDKManager } from '../core/AndroidSDKManager';
 import { exec, spawn, ChildProcess } from 'child_process'; // Added spawn and ChildProcess
 import { fetchFriendlyDeviceInfo } from '../utils/deviceUtils';
+import { PackageNameDetector } from '../utils/PackageNameDetector';
 
 const execAsync = promisify(exec);
 
@@ -226,16 +227,47 @@ export class DeviceManager {
         if (!device) throw new Error('No device selected');
 
         const adbPath = this.sdkManager.getADBPath();
-        const fullActivity = `${packageName}/${activityName}`;
+        const fullActivity = activityName.includes('/')
+            ? activityName
+            : `${packageName}/${activityName}`;
         await execAsync(`"${adbPath}" -s ${device.id} shell am start -n ${fullActivity}`);
     }
 
     /**
+     * Resolve the launcher activity installed for an application package.
+     */
+    async getLaunchableActivity(packageName: string): Promise<string> {
+        const device = this.selectedDevice;
+        if (!device) throw new Error('No device selected');
+
+        const adbPath = this.sdkManager.getADBPath();
+        const { stdout } = await execAsync(
+            `"${adbPath}" -s ${device.id} shell cmd package resolve-activity --brief "${packageName}"`
+        );
+        const activity = stdout
+            .split(/\r?\n/)
+            .map(line => line.trim())
+            .filter(line => line.includes('/'))
+            .pop();
+
+        if (!activity) {
+            throw new Error(`Unable to find launcher activity for package: ${packageName}`);
+        }
+
+        return activity;
+    }
+
+    /**
      * Get package name from APK
-     * TODO: Implement proper APK parsing using aapt
      */
     async getPackageName(apkPath: string): Promise<string> {
-        return 'com.example.app'; // Simplified for now
+        const packageName = await PackageNameDetector.getPackageFromApk(apkPath);
+
+        if (!packageName) {
+            throw new Error(`Unable to determine package name from APK: ${apkPath}`);
+        }
+
+        return packageName;
     }
 
     dispose() {

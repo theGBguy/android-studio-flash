@@ -173,9 +173,9 @@ export class BuildSystem {
             // Get package name
             const packageName = await this.deviceManager.getPackageName(apkPath);
             
-            // Launch app
-            const activityName = '.MainActivity'; // Default
-            await this.deviceManager.launchApp(packageName, activityName);
+            // Resolve the installed launcher activity; its package can differ from the application ID.
+            const activity = await this.deviceManager.getLaunchableActivity(packageName);
+            await this.deviceManager.launchApp(packageName, activity);
             
             vscode.window.showInformationMessage('✅ App launched successfully!');
 
